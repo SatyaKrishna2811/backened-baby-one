@@ -184,9 +184,17 @@ class BhashiniService:
     def process_audio(self, audio_base64: str, source_lang: str, target_lang: str, audio_format: str, max_retries: int = 3) -> Dict[str, Any]:
         """Process audio through Bhashini ASR and Translation pipeline with retry logic for 500 errors"""
         try:
-            # Normalize language codes
-            source_lang = source_lang.split('-')[0].lower()
-            target_lang = target_lang.split('-')[0].lower()
+            # Normalize language codes and ensure defaults
+            source_lang = source_lang.split('-')[0].lower() if source_lang else 'hi'
+            target_lang = target_lang.split('-')[0].lower() if target_lang else 'en'
+            
+            # Ensure supported languages (only hi and en)
+            if source_lang not in ['hi', 'en']:
+                logger.warning(f"Unsupported source language '{source_lang}', defaulting to 'hi'")
+                source_lang = 'hi'
+            if target_lang not in ['hi', 'en']:
+                logger.warning(f"Unsupported target language '{target_lang}', defaulting to 'en'")
+                target_lang = 'en'
             
             logger.info(f"Processing audio: {source_lang} -> {target_lang}, format: {audio_format}")
             
@@ -255,7 +263,7 @@ class BhashiniService:
             
             # Log request details for debugging
             logger.info(f"ASR request details:")
-            logger.info(f"- Language: {language_code}")
+            logger.info(f"- Language: {source_lang}")
             logger.info(f"- Audio data size: {len(resampled_audio_b64)} characters")
             logger.info(f"- Service ID: ai4bharat/indictrans-v2-all-gpu--t4")
             logger.info(f"- Compute URL: {self.compute_url}")
