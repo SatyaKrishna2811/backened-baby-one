@@ -11,13 +11,23 @@ import tempfile
 import copy
 import time
 
-# Disable librosa cache to prevent deployment issues
-os.environ['LIBROSA_CACHE_DIR'] = '/tmp/librosa_cache'
+# Completely disable librosa caching to prevent deployment issues
+os.environ['LIBROSA_CACHE_DIR'] = ''
+os.environ['LIBROSA_CACHE_LEVEL'] = '0'
+os.environ['JOBLIB_TEMP_FOLDER'] = '/tmp'
+
 try:
     import librosa
-    librosa.util.cache.cache.disable()
-except:
-    pass
+    import joblib
+    # Disable all caching mechanisms
+    librosa.cache.clear()
+    if hasattr(librosa.cache, 'disable'):
+        librosa.cache.disable()
+    # Disable joblib memory caching
+    joblib.Memory.clear = lambda self, warn=True: None
+    joblib.parallel.parallel_backend('threading', n_jobs=1)
+except Exception as e:
+    logging.warning(f"Librosa cache disabling failed: {e}")
 
 import soundfile as sf
 import io
@@ -196,13 +206,13 @@ class BhashiniService:
                 logger.warning(f"Audio resampling failed, using original: {str(e)}")
                 resampled_audio_b64 = audio_base64
             
-            # Language detection (optional, use provided source_lang as fallback)
+            # Language detection (disabled to avoid 500 errors - use provided source_lang)
             try:
-                detected_lang = self.detect_language(resampled_audio_b64)
-                if detected_lang and detected_lang != source_lang:
-                    logger.info(f"Language detection suggests: {detected_lang}, but using provided: {source_lang}")
+                # Skip language detection since it's causing 500 errors in production
+                logger.info(f"Using provided language: {source_lang} (language detection disabled)")
+                detected_lang = source_lang
             except Exception:
-                pass
+                detected_lang = source_lang
             
             # Use the exact working payload structure from GeminiBackend
             payload = {
@@ -243,12 +253,18 @@ class BhashiniService:
             
             headers = {"Authorization": self.api_token}
             
+            # Log request details for debugging
+            logger.info(f"ASR request details:")
+            logger.info(f"- Language: {language_code}")
+            logger.info(f"- Audio data size: {len(resampled_audio_b64)} characters")
+            logger.info(f"- Service ID: ai4bharat/indictrans-v2-all-gpu--t4")
+            logger.info(f"- Compute URL: {self.compute_url}")
+            logger.info(f"- Auth token starts with: {self.api_token[:20]}...")
+            
             # Retry logic for handling 500 errors
             for attempt in range(max_retries):
                 try:
                     logger.info(f"Bhashini API attempt {attempt + 1}/{max_retries}")
-                    logger.info(f"Sending compute request to: {self.compute_url}")
-                    logger.info(f"Auth token: {self.api_token[:20]}...")
                     
                     response = requests.post(self.compute_url, headers=headers, json=payload, timeout=120)
                     
@@ -293,6 +309,13 @@ class BhashiniService:
                         error_msg = f"Bhashini API returned 500 on attempt {attempt + 1}"
                         logger.warning(error_msg)
                         
+                        # Log the response for debugging
+                        try:
+                            error_detail = response.json()
+                            logger.error(f"500 Error detail: {error_detail}")
+                        except:
+                            logger.error(f"500 Error response: {response.text[:200]}")
+                        
                         if attempt == max_retries - 1:
                             # Last attempt failed
                             logger.error(f"Bhashini API failed after {max_retries} attempts with 500 errors")
@@ -303,6 +326,16 @@ class BhashiniService:
                         logger.info(f"Waiting {wait_time} seconds before retry...")
                         time.sleep(wait_time)
                         continue
+                    
+                    elif response.status_code == 401:
+                        error_msg = f"Bhashini API authentication failed: {response.status_code}"
+                        logger.error(error_msg)
+                        raise APIError("Bhashini API authentication failed - check API token", 401, "bhashini")
+                    
+                    elif response.status_code == 400:
+                        error_msg = f"Bhashini API bad request: {response.status_code} - {response.text}"
+                        logger.error(error_msg)
+                        raise APIError(f"Bhashini API bad request: {response.text}", 400, "bhashini")
                     
                     else:
                         # Non-500 error, don't retry
