@@ -1,0 +1,184 @@
+{
+  "info": {
+    "name": "AI Meeting Assistant Backend API",
+    "description": "Complete API collection for testing the AI Meeting Assistant Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "production_url",
+      "value": "https://your-deployed-backend.onrender.com",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/health/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health", ""]
+        },
+        "description": "Check if all services (Bhashini and Gemini) are healthy"
+      },
+      "response": []
+    },
+    {
+      "name": "Root Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/",
+          "host": ["{{base_url}}"],
+          "path": [""]
+        },
+        "description": "Basic root endpoint health check"
+      },
+      "response": []
+    },
+    {
+      "name": "Supported Languages",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/supported-languages/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "supported-languages", ""]
+        },
+        "description": "Get list of all supported languages for transcription and translation"
+      },
+      "response": []
+    },
+    {
+      "name": "Supported Audio Formats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/supported-audio-formats/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "supported-audio-formats", ""]
+        },
+        "description": "Get list of supported audio file formats"
+      },
+      "response": []
+    },
+    {
+      "name": "Process Audio - JSON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"audioData\": \"UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=\",\n  \"sourceLanguage\": \"hi\",\n  \"targetLanguage\": \"en\",\n  \"audioFormat\": \"wav\",\n  \"preMeetingNotes\": \"This is a test meeting to verify the API functionality\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/process-audio/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "process-audio", ""]
+        },
+        "description": "Process audio with JSON payload - includes base64 encoded audio data"
+      },
+      "response": []
+    },
+    {
+      "name": "Process Audio - Form Data",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "audio",
+              "type": "file",
+              "src": [],
+              "description": "Upload an audio file (wav, mp3, flac, m4a, ogg)"
+            },
+            {
+              "key": "sourceLanguage",
+              "value": "hi",
+              "type": "text",
+              "description": "Source language code (e.g., hi, en, bn)"
+            },
+            {
+              "key": "targetLanguage",
+              "value": "en",
+              "type": "text",
+              "description": "Target language code for translation"
+            },
+            {
+              "key": "preMeetingNotes",
+              "value": "Test meeting for API verification",
+              "type": "text",
+              "description": "Optional pre-meeting context"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/process-audio/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "process-audio", ""]
+        },
+        "description": "Process audio with multipart form data - upload actual audio file"
+      },
+      "response": []
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pre-request script for logging",
+          "console.log('Testing AI Meeting Assistant API...');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Test script for all requests",
+          "pm.test('Response status code is 200', function () {",
+          "    pm.response.to.have.status(200);",
+          "});",
+          "",
+          "pm.test('Response time is less than 30s', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(30000);",
+          "});",
+          "",
+          "pm.test('Response has success field', function () {",
+          "    const jsonData = pm.response.json();",
+          "    pm.expect(jsonData).to.have.property('success');",
+          "});"
+        ]
+      }
+    }
+  ]
+}

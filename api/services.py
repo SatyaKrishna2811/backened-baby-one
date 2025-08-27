@@ -9,7 +9,16 @@ import requests
 import base64
 import tempfile
 import copy
-import librosa
+import time
+
+# Disable librosa cache to prevent deployment issues
+os.environ['LIBROSA_CACHE_DIR'] = '/tmp/librosa_cache'
+try:
+    import librosa
+    librosa.util.cache.cache.disable()
+except:
+    pass
+
 import soundfile as sf
 import io
 import re
@@ -54,24 +63,71 @@ class BhashiniService:
             return {}
     
     def load_and_resample_audio(self, audio_data, target_sr=16000):
-        """Load and resample audio data to target sample rate"""
+        """Load and resample audio data to target sample rate with fallback"""
         try:
+            # Disable librosa caching to avoid joblib issues
+            import librosa
+            try:
+                # Try to disable caching - newer versions use different method
+                if hasattr(librosa.cache, 'disable'):
+                    librosa.cache.disable()
+                elif hasattr(librosa.cache, 'clear'):
+                    librosa.cache.clear()
+                else:
+                    # Set memory limit to 0 to effectively disable caching
+                    import librosa.cache
+                    librosa.cache.memory = None
+            except Exception:
+                logger.warning("Could not disable librosa caching, continuing anyway")
+            
             # Create a temporary file to save the audio data
             with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
                 temp_file.write(audio_data)
                 temp_path = temp_file.name
             
-            # Load and resample using librosa
-            y, sr = librosa.load(temp_path, sr=None)
-            y_resampled = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
-            
-            # Clean up temporary file
-            os.unlink(temp_path)
-            
-            return y_resampled, target_sr
+            try:
+                # Load and resample using librosa
+                y, sr = librosa.load(temp_path, sr=None)
+                y_resampled = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+                
+                # Clean up temporary file
+                os.unlink(temp_path)
+                
+                return y_resampled, target_sr
+                
+            except Exception as librosa_error:
+                logger.warning(f"Librosa resampling failed: {str(librosa_error)}")
+                
+                # Fallback: try with soundfile only (no resampling)
+                try:
+                    import soundfile as sf
+                    y, sr = sf.read(temp_path)
+                    
+                    # If sample rate is already 16kHz or close, use as-is
+                    if abs(sr - target_sr) < 1000:
+                        os.unlink(temp_path)
+                        return y, sr
+                    
+                    # Simple decimation for downsampling (not perfect but works)
+                    if sr > target_sr:
+                        step = int(sr / target_sr)
+                        y_resampled = y[::step]
+                        os.unlink(temp_path)
+                        return y_resampled, target_sr
+                    
+                    # For upsampling or if all else fails, return original
+                    os.unlink(temp_path)
+                    return y, sr
+                    
+                except Exception:
+                    # Last resort: return original data
+                    os.unlink(temp_path)
+                    logger.warning("Audio resampling completely failed, using original")
+                    return None, None
+                    
         except Exception as e:
-            logger.error(f"Audio resampling failed: {str(e)}")
-            raise APIError(f"Audio processing failed: {str(e)}", 500, "bhashini")
+            logger.error(f"Audio processing failed: {str(e)}")
+            return None, None
     
     def audio_to_base64(self, y, sr):
         """Convert audio array to base64"""
@@ -115,8 +171,8 @@ class BhashiniService:
             logger.warning(f"Language detection failed: {str(e)}")
             return "hi"  # Default to Hindi
     
-    def process_audio(self, audio_base64: str, source_lang: str, target_lang: str, audio_format: str) -> Dict[str, Any]:
-        """Process audio through Bhashini ASR and Translation pipeline using working GeminiBackend approach"""
+    def process_audio(self, audio_base64: str, source_lang: str, target_lang: str, audio_format: str, max_retries: int = 3) -> Dict[str, Any]:
+        """Process audio through Bhashini ASR and Translation pipeline with retry logic for 500 errors"""
         try:
             # Normalize language codes
             source_lang = source_lang.split('-')[0].lower()
@@ -127,11 +183,15 @@ class BhashiniService:
             # Decode base64 audio
             audio_data = base64.b64decode(audio_base64)
             
-            # Resample audio to 16kHz (critical for Bhashini)
+            # Resample audio to 16kHz (critical for Bhashini) with improved error handling
             try:
                 y_resampled, sr = self.load_and_resample_audio(audio_data)
-                resampled_audio_b64 = self.audio_to_base64(y_resampled, sr)
-                logger.info("✅ Audio resampled to 16kHz")
+                if y_resampled is not None:
+                    resampled_audio_b64 = self.audio_to_base64(y_resampled, sr)
+                    logger.info("✅ Audio resampled to 16kHz")
+                else:
+                    logger.warning("Audio resampling failed, using original")
+                    resampled_audio_b64 = audio_base64
             except Exception as e:
                 logger.warning(f"Audio resampling failed, using original: {str(e)}")
                 resampled_audio_b64 = audio_base64
@@ -183,60 +243,97 @@ class BhashiniService:
             
             headers = {"Authorization": self.api_token}
             
-            logger.info(f"Sending compute request to: {self.compute_url}")
-            logger.info(f"Auth token: {self.api_token[:20]}...")
+            # Retry logic for handling 500 errors
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Bhashini API attempt {attempt + 1}/{max_retries}")
+                    logger.info(f"Sending compute request to: {self.compute_url}")
+                    logger.info(f"Auth token: {self.api_token[:20]}...")
+                    
+                    response = requests.post(self.compute_url, headers=headers, json=payload, timeout=120)
+                    
+                    logger.info(f"Compute response status: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        result = self.safe_json(response)
+                        
+                        # Log full response for debugging
+                        logger.info("🧾 Bhashini ASR+Translation Response:")
+                        logger.info(json.dumps(result, indent=2))
+                        
+                        # Extract results using GeminiBackend approach
+                        outputs = result.get("pipelineResponse", [])
+                        if len(outputs) < 2:
+                            logger.error("❌ Bhashini response missing expected outputs")
+                            raise APIError("Incomplete Bhashini response", 500, "bhashini")
+                        
+                        # Extract transcription and translation
+                        transcript = ""
+                        translation = ""
+                        
+                        try:
+                            transcript = outputs[0].get("output", [{}])[0].get("source", "")
+                            translation = outputs[1].get("output", [{}])[0].get("target", "")
+                            
+                            logger.info(f"✅ Transcription: {transcript[:100]}...")
+                            logger.info(f"✅ Translation: {translation[:100]}...")
+                            
+                            return {
+                                "transcription": transcript,
+                                "translation": translation,
+                                "detected_language": source_lang,
+                                "status": "success"
+                            }
+                            
+                        except Exception as extract_error:
+                            logger.error(f"Error extracting results: {str(extract_error)}")
+                            raise APIError(f"Failed to extract results: {str(extract_error)}", 500, "bhashini")
+                    
+                    elif response.status_code == 500:
+                        error_msg = f"Bhashini API returned 500 on attempt {attempt + 1}"
+                        logger.warning(error_msg)
+                        
+                        if attempt == max_retries - 1:
+                            # Last attempt failed
+                            logger.error(f"Bhashini API failed after {max_retries} attempts with 500 errors")
+                            raise APIError(f"Bhashini API failed after {max_retries} attempts: 500 Internal Server Error", 500, "bhashini")
+                        
+                        # Wait before retry (exponential backoff)
+                        wait_time = 2 ** attempt
+                        logger.info(f"Waiting {wait_time} seconds before retry...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    else:
+                        # Non-500 error, don't retry
+                        error_msg = f"Bhashini compute request failed: {response.status_code} - {response.text}"
+                        logger.error(error_msg)
+                        raise APIError(error_msg, response.status_code, "bhashini")
+                        
+                except requests.exceptions.Timeout:
+                    logger.warning(f"Bhashini API timeout on attempt {attempt + 1}")
+                    if attempt == max_retries - 1:
+                        raise APIError("Bhashini API timeout after retries", 408, "bhashini")
+                    time.sleep(2 ** attempt)
+                    
+                except requests.exceptions.ConnectionError:
+                    logger.warning(f"Bhashini API connection error on attempt {attempt + 1}")
+                    if attempt == max_retries - 1:
+                        raise APIError("Bhashini API connection failed", 503, "bhashini")
+                    time.sleep(2 ** attempt)
+                    
+                except APIError:
+                    # Re-raise APIError as-is
+                    raise
+                    
+                except Exception as e:
+                    logger.error(f"Unexpected error on attempt {attempt + 1}: {str(e)}")
+                    if attempt == max_retries - 1:
+                        raise APIError(f"Bhashini processing failed: {str(e)}", 500, "bhashini")
+                    time.sleep(2 ** attempt)
             
-            response = requests.post(self.compute_url, headers=headers, json=payload, timeout=120)
-            
-            logger.info(f"Compute response status: {response.status_code}")
-            
-            if response.status_code != 200:
-                logger.error(f"Bhashini compute request failed: {response.status_code} - {response.text}")
-                raise APIError(f"Bhashini processing failed: {response.status_code} - {response.text}", response.status_code, "bhashini")
-            
-            result = self.safe_json(response)
-            
-            # Log full response for debugging
-            logger.info("🧾 Bhashini ASR+Translation Response:")
-            logger.info(json.dumps(result, indent=2))
-            
-            # Extract results using GeminiBackend approach
-            outputs = result.get("pipelineResponse", [])
-            if len(outputs) < 2:
-                logger.error("❌ Bhashini response missing expected outputs")
-                raise APIError("Incomplete Bhashini response", 500, "bhashini")
-            
-            # Extract transcription and translation
-            transcript = ""
-            translation = ""
-            
-            try:
-                transcript = outputs[0].get("output", [{}])[0].get("source", "")
-                translation = outputs[1].get("output", [{}])[0].get("target", "")
-                
-                logger.info(f"Transcription: {transcript}")
-                logger.info(f"Translation: {translation}")
-                
-                # Build response in expected format
-                formatted_result = {
-                    "pipelineResponse": [
-                        {
-                            "taskType": "asr",
-                            "output": [{"source": transcript}]
-                        },
-                        {
-                            "taskType": "translation", 
-                            "output": [{"target": translation}]
-                        }
-                    ]
-                }
-                
-                logger.info("Bhashini processing completed successfully")
-                return formatted_result
-                
-            except (IndexError, KeyError) as e:
-                logger.error(f"Error extracting transcription/translation: {str(e)}")
-                raise APIError("Failed to extract results from Bhashini response", 500, "bhashini")
+            # Should never reach here
+            raise APIError("Bhashini API failed unexpectedly after all retries", 500, "bhashini")
             
         except APIError:
             raise

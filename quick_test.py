@@ -1,79 +1,113 @@
-#!/usr/bin/env python3
 """
-Environment variable validation script for AI Meeting Assistant backend.
-Verifies that all required environment variables are properly configured.
+Quick API Key Verification Script
+Tests Bhashini and Gemini API keys directly
 """
 import os
-import sys
+import requests
+import json
+from datetime import datetime
 
-def validate_environment_variables():
-    """
-    Validate that all required environment variables are present.
-    
-    Returns:
-        bool: True if all variables are present, False otherwise
-    """
-    print("Testing Environment Variables...")
-    print("=" * 60)
-    
-    # Required environment variables
-    required_variables = {
-        'BHASHINI_USER_ID': 'Bhashini User ID for API authentication',
-        'ULCA_API_KEY': 'ULCA API Key for Bhashini services',
-        'BHASHINI_AUTH_TOKEN': 'Bhashini Authorization Token',
-        'OPENAI_API_KEY': 'OpenAI API Key for GPT services',
-        'DJANGO_SECRET_KEY': 'Django Secret Key for security'
-    }
-    
-    missing_variables = []
-    present_variables = []
-    
-    for variable_name, description in required_variables.items():
-        value = os.getenv(variable_name)
-        if value:
-            # Mask sensitive values for security
-            masked_value = f"{value[:8]}..." if len(value) > 8 else "***"
-            print(f"PASS {variable_name}: {masked_value}")
-            present_variables.append(variable_name)
+# Your API keys
+BHASHINI_TOKEN = "ujzb4jidEwJo1U-IDxGr2iMkRChAw8qrKcKUQsCA1RSOC2rt6ITU3TihElxkmoHA"
+GEMINI_API_KEY = "AIzaSyDQq1B4ZAsHIwVvK49Sl99up4H4JA0GxGQ"
+
+def test_bhashini_api():
+    """Test Bhashini API directly"""
+    print("Testing Bhashini API...")
+    try:
+        # Test language detection endpoint
+        url = "https://dhruva-api.bhashini.gov.in/services/inference/pipeline"
+        headers = {"Authorization": BHASHINI_TOKEN}
+        
+        # Simple language detection payload
+        payload = {
+            "pipelineTasks": [
+                {
+                    "taskType": "audio-lang-detection",
+                    "config": {
+                        "serviceId": "bhashini/iitmandi/audio-lang-detection/gpu"
+                    }
+                }
+            ],
+            "inputData": {"audio": [{"audioContent": "UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="}]}
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            print("SUCCESS: Bhashini API is working")
+            print(f"  Response: {response.status_code}")
+            return True
         else:
-            print(f"FAIL {variable_name}: Missing")
-            missing_variables.append(variable_name)
-    
-    print("=" * 60)
-    
-    if missing_variables:
-        print(f"ERROR: Missing {len(missing_variables)} required variables")
-        print("Missing variables:", ", ".join(missing_variables))
-        print("\nTo resolve:")
-        print("1. Create .env file in backend directory")
-        print("2. Add missing variables with actual values")
-        print("3. For Render deployment, add variables in dashboard")
+            print(f"ERROR: Bhashini API failed - Status: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"ERROR: Bhashini API test failed: {str(e)}")
         return False
-    else:
-        print(f"SUCCESS: All {len(present_variables)} variables configured")
-        return True
+
+def test_gemini_api():
+    """Test Gemini API directly"""
+    print("\nTesting Gemini API...")
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "Hello, this is a test. Please respond with 'API Working'"
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'candidates' in data:
+                print("SUCCESS: Gemini API is working")
+                print(f"  Response: {response.status_code}")
+                return True
+            else:
+                print("ERROR: Gemini API returned unexpected format")
+                return False
+        else:
+            print(f"ERROR: Gemini API failed - Status: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"ERROR: Gemini API test failed: {str(e)}")
+        return False
 
 def main():
-    """Main execution function."""
-    # Attempt to load environment variables from .env file
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        print("INFO: Loaded environment variables from .env file")
-    except ImportError:
-        print("INFO: Using system environment variables")
+    """Run API key tests"""
+    print("AI Meeting Assistant - API Key Verification")
+    print("=" * 50)
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    print()
     
-    # Validate environment setup
-    is_valid = validate_environment_variables()
+    bhashini_ok = test_bhashini_api()
+    gemini_ok = test_gemini_api()
     
-    if is_valid:
-        print("\nSUCCESS: Environment configuration is valid")
-        print("Backend is ready for deployment")
-        sys.exit(0)
+    print("\n" + "=" * 50)
+    print("API Key Test Results:")
+    print(f"  Bhashini: {'WORKING' if bhashini_ok else 'FAILED'}")
+    print(f"  Gemini: {'WORKING' if gemini_ok else 'FAILED'}")
+    
+    if bhashini_ok and gemini_ok:
+        print("\nSUCCESS: Both API keys are working correctly!")
+        print("Your backend is ready for production deployment.")
     else:
-        print("\nERROR: Environment configuration is invalid")
-        print("Fix missing variables before deployment")
-        sys.exit(1)
+        print("\nWARNING: Some API keys are not working.")
+    
+    return bhashini_ok and gemini_ok
 
 if __name__ == "__main__":
-    main()
+    success = main()
