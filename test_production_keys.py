@@ -13,7 +13,7 @@ load_dotenv()
 
 def test_bhashini_api():
     """Test Bhashini API with production credentials"""
-    print("🔑 Testing Bhashini API...")
+    print("Testing Bhashini API...")
     
     # Get credentials
     auth_token = os.getenv('BHASHINI_AUTH_TOKEN') or os.getenv('BHASHINI_API_KEY')
@@ -25,7 +25,7 @@ def test_bhashini_api():
     print(f"   ULCA Key: {ulca_key[:20] if ulca_key else 'NOT SET'}...")
     
     if not auth_token:
-        print("❌ BHASHINI_AUTH_TOKEN not found")
+        print("FAIL: BHASHINI_AUTH_TOKEN not found")
         return False
     
     # Test with pipeline configuration request
@@ -64,31 +64,31 @@ def test_bhashini_api():
         print(f"   Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            print("✅ Bhashini API: WORKING")
+            print("PASS: Bhashini API working")
             return True
         elif response.status_code == 401:
-            print("❌ Bhashini API: Authentication failed - check token")
+            print("FAIL: Bhashini API authentication failed - check token")
         elif response.status_code == 500:
-            print("⚠️  Bhashini API: Server error - may be temporary")
+            print("WARN: Bhashini API server error - may be temporary")
         else:
-            print(f"⚠️  Bhashini API: Unexpected status {response.status_code}")
+            print(f"WARN: Bhashini API unexpected status {response.status_code}")
             print(f"   Response: {response.text[:200]}")
         
         return False
         
     except Exception as e:
-        print(f"❌ Bhashini API: Connection failed - {str(e)}")
+        print(f"FAIL: Bhashini API connection failed - {str(e)}")
         return False
 
 def test_gemini_api():
     """Test Gemini API with production credentials"""
-    print("\n🔑 Testing Gemini API...")
+    print("\nTesting Gemini API...")
     
     api_key = os.getenv('GEMINI_API_KEY')
     print(f"   API Key: {api_key[:20] if api_key else 'NOT SET'}...")
     
     if not api_key:
-        print("❌ GEMINI_API_KEY not found")
+        print("FAIL: GEMINI_API_KEY not found")
         return False
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
@@ -110,36 +110,36 @@ def test_gemini_api():
         print(f"   Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            print("✅ Gemini API: WORKING")
+            print("PASS: Gemini API working")
             return True
         elif response.status_code == 401:
-            print("❌ Gemini API: Authentication failed - check API key")
+            print("FAIL: Gemini API authentication failed - check API key")
         elif response.status_code == 403:
-            print("❌ Gemini API: Forbidden - check API key permissions")
+            print("FAIL: Gemini API forbidden - check API key permissions")
         else:
-            print(f"⚠️  Gemini API: Unexpected status {response.status_code}")
+            print(f"WARN: Gemini API unexpected status {response.status_code}")
             print(f"   Response: {response.text[:200]}")
         
         return False
         
     except Exception as e:
-        print(f"❌ Gemini API: Connection failed - {str(e)}")
+        print(f"FAIL: Gemini API connection failed - {str(e)}")
         return False
 
 def main():
     """Main test function"""
-    print("🚀 Testing Production API Keys for Render Deployment")
+    print("Testing Production API Keys for Render Deployment")
     print("=" * 60)
     
     bhashini_ok = test_bhashini_api()
     gemini_ok = test_gemini_api()
     
     print("\n" + "=" * 60)
-    print("📊 PRODUCTION API KEY TEST SUMMARY")
+    print("PRODUCTION API KEY TEST SUMMARY")
     print("=" * 60)
     
     if bhashini_ok and gemini_ok:
-        print("🎉 All API keys are working! Ready for Render deployment.")
+        print("PASS: All API keys are working. Ready for Render deployment.")
         print("\nNext steps:")
         print("1. Push code to GitHub")
         print("2. Create new web service on Render.com")
@@ -148,7 +148,7 @@ def main():
         print("5. Deploy and test live endpoints")
         return True
     else:
-        print("⚠️  Some API keys need attention before deployment")
+        print("FAIL: Some API keys need attention before deployment")
         if not bhashini_ok:
             print("   - Fix Bhashini credentials")
         if not gemini_ok:

@@ -12,7 +12,7 @@ load_dotenv()
 
 def check_deployment_readiness():
     """Final check before Render deployment"""
-    print("🎯 FINAL RENDER DEPLOYMENT CHECK")
+    print("FINAL RENDER DEPLOYMENT CHECK")
     print("=" * 50)
     
     # Check environment variables
@@ -23,18 +23,18 @@ def check_deployment_readiness():
         'FRONTEND_URL': 'CORS configuration'
     }
     
-    print("📋 Environment Variables:")
+    print("Environment Variables:")
     all_set = True
     for var, description in required_vars.items():
         value = os.getenv(var)
         if value:
-            print(f"   ✅ {var}: {value[:20]}... ({description})")
+            print(f"   PASS {var}: {value[:20]}... ({description})")
         else:
-            print(f"   ❌ {var}: NOT SET ({description})")
+            print(f"   FAIL {var}: NOT SET ({description})")
             all_set = False
     
     # Check deployment files
-    print("\n📁 Deployment Files:")
+    print("\nDeployment Files:")
     deployment_files = [
         'render.yaml',
         'build.sh', 
@@ -45,31 +45,31 @@ def check_deployment_readiness():
     
     for file_path in deployment_files:
         if os.path.exists(file_path):
-            print(f"   ✅ {file_path}")
+            print(f"   PASS {file_path}")
         else:
-            print(f"   ❌ {file_path}: MISSING")
+            print(f"   FAIL {file_path}: MISSING")
             all_set = False
     
     # Production checklist
-    print("\n🔧 Production Features:")
+    print("\nProduction Features:")
     features = [
-        "✅ Librosa caching disabled (prevents deployment crashes)",
-        "✅ Retry logic for API failures (3 attempts with backoff)",
-        "✅ Audio processing fallback (original file if resampling fails)",
-        "✅ Comprehensive error handling (no unhandled exceptions)",
-        "✅ CORS configured for Vercel frontend",
-        "✅ Production security headers enabled",
-        "✅ Static files with WhiteNoise compression",
-        "✅ Gunicorn WSGI server with 2 workers",
-        "✅ 120s timeout for audio processing",
-        "✅ Health check endpoint for monitoring"
+        "PASS Librosa caching disabled (prevents deployment crashes)",
+        "PASS Retry logic for API failures (3 attempts with backoff)",
+        "PASS Audio processing fallback (original file if resampling fails)",
+        "PASS Comprehensive error handling (no unhandled exceptions)",
+        "PASS CORS configured for Vercel frontend",
+        "PASS Production security headers enabled",
+        "PASS Static files with WhiteNoise compression",
+        "PASS Gunicorn WSGI server with 2 workers",
+        "PASS 120s timeout for audio processing",
+        "PASS Health check endpoint for monitoring"
     ]
     
     for feature in features:
         print(f"   {feature}")
     
     # Deployment instructions
-    print("\n🚀 DEPLOY TO RENDER:")
+    print("\nDEPLOY TO RENDER:")
     print("   1. Go to render.com and sign in")
     print("   2. Click 'New +' → 'Web Service'")
     print("   3. Connect: https://github.com/riteshroshann/backend-baby_two")
@@ -77,16 +77,16 @@ def check_deployment_readiness():
     print("   5. Deploy and wait ~5-7 minutes")
     print("   6. Test: https://your-app.onrender.com/api/health/")
     
-    print("\n📱 UPDATE FRONTEND:")
+    print("\nUPDATE FRONTEND:")
     print("   Replace API_BASE_URL with your Render URL:")
     print("   https://your-service-name.onrender.com")
     
     if all_set:
-        print("\n🎉 READY FOR DEPLOYMENT!")
-        print("   Your backend is 100% production-ready.")
+        print("\nREADY FOR DEPLOYMENT")
+        print("   Your backend is production-ready.")
         return True
     else:
-        print("\n⚠️  Please fix missing items before deploying")
+        print("\nPlease fix missing items before deploying")
         return False
 
 if __name__ == '__main__':
