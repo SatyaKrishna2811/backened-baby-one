@@ -213,11 +213,12 @@ class BhashiniService:
                             "language": {
                                 "sourceLanguage": source_lang
                             },
-                            "serviceId": "ai4bharat/conformer-multilingual-asr",
+                            "serviceId": "bhashini/ai4bharat/conformer-multilingual-asr",
                             "audioFormat": "wav",
                             "samplingRate": 16000,
-                            "preProcessors": ["vad", "denoiser"],
-                            "postprocessors": ["itn", "punctuation"]
+                            "postprocessors": [
+                                "itn"
+                            ]
                         }
                     },
                     {
