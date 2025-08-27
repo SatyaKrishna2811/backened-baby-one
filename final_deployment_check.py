@@ -72,7 +72,7 @@ def check_deployment_readiness():
     print("\nDEPLOY TO RENDER:")
     print("   1. Go to render.com and sign in")
     print("   2. Click 'New +' → 'Web Service'")
-    print("   3. Connect: https://github.com/riteshroshann/backend-baby_two")
+    print("   3. Connect: https://github.com/riteshroshann/meeting-mind-backened-baby-one")
     print("   4. Use render.yaml configuration (auto-detected)")
     print("   5. Deploy and wait ~5-7 minutes")
     print("   6. Test: https://your-app.onrender.com/api/health/")

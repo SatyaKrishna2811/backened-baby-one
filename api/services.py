@@ -39,12 +39,12 @@ class BhashiniService:
     """Service for Bhashini API integration following working GeminiBackend implementation"""
     
     def __init__(self):
-        # Use the working API token from GeminiBackend as fallback
+        # Use production API tokens with proper priority
         self.api_token = (
             os.getenv('BHASHINI_AUTH_TOKEN') or 
-            os.getenv('ULCA_API_KEY') or 
             os.getenv('BHASHINI_API_KEY') or
-            "ujzb4jidEwJo1U-IDxGr2iMkRChAw8qrKcKUQsCA1RSOC2rt6ITU3TihElxkmoHA"  # Working token from GeminiBackend
+            os.getenv('ULCA_API_KEY') or
+            "ZfWdt3Z4lzxuYIJOYzsfs-XfDLQ8RKlxh9O_d5FwTT4-zNhciB30Oy_mD2ceQ61h"  # Production token
         )
         
         self.compute_url = "https://dhruva-api.bhashini.gov.in/services/inference/pipeline"
@@ -213,12 +213,11 @@ class BhashiniService:
                             "language": {
                                 "sourceLanguage": source_lang
                             },
-                            "serviceId": "bhashini/ai4bharat/conformer-multilingual-asr",
+                            "serviceId": "ai4bharat/conformer-multilingual-asr",
                             "audioFormat": "wav",
                             "samplingRate": 16000,
-                            "postprocessors": [
-                                "itn"
-                            ]
+                            "preProcessors": ["vad", "denoiser"],
+                            "postprocessors": ["itn", "punctuation"]
                         }
                     },
                     {
