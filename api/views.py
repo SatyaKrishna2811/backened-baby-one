@@ -139,21 +139,65 @@ def process_audio(request):
         transcript = ""
         translation = ""
         
+        # Handle both direct Bhashini response and processed response formats
         if 'pipelineResponse' in bhashini_result:
+            # Handle raw Bhashini response format
             for response in bhashini_result['pipelineResponse']:
                 if response['taskType'] == 'asr' and response.get('output'):
                     transcript = response['output'][0].get('source', '')
                 elif response['taskType'] == 'translation' and response.get('output'):
                     translation = response['output'][0].get('target', '')
+        elif 'transcription' in bhashini_result:
+            # Handle processed response format from services.py
+            transcript = bhashini_result.get('transcription', '')
+            translation = bhashini_result.get('translation', '')
+        
+        # Log extraction results for debugging
+        logger.info(f"Extracted transcript: '{transcript[:100]}...' (length: {len(transcript)})")
+        logger.info(f"Extracted translation: '{translation[:100]}...' (length: {len(translation)})")
         
         # If no translation was performed (same language), use transcript as translation
         if not translation and transcript:
             translation = transcript
+            logger.info("Using transcript as translation (same language)")
+        
+        # If still no content, check for any text in the Bhashini result
+        if not transcript and not translation:
+            logger.warning("No transcript or translation extracted from Bhashini result")
+            logger.warning(f"Raw Bhashini result keys: {list(bhashini_result.keys())}")
+            
+            # Try to extract from any available source
+            if isinstance(bhashini_result, dict):
+                for key, value in bhashini_result.items():
+                    if isinstance(value, str) and len(value.strip()) > 0:
+                        logger.info(f"Found text in key '{key}': {value[:50]}...")
+                        if not transcript:
+                            transcript = value
+                        if not translation:
+                            translation = value
         
         # Generate AI summary using Gemini
         gemini_service = get_gemini_service()
+        
+        # Prepare content for AI analysis
+        content_for_analysis = translation or transcript
+        
+        # If we have no content from audio processing, create a meaningful fallback
+        if not content_for_analysis or content_for_analysis.strip() == "":
+            logger.warning("No transcript/translation content available for AI analysis")
+            
+            # Create a basic response with metadata
+            if pre_meeting_notes and pre_meeting_notes.strip():
+                # Use pre-meeting notes if available
+                content_for_analysis = f"Pre-meeting notes: {pre_meeting_notes}"
+                logger.info("Using pre-meeting notes for AI analysis")
+            else:
+                # Create a fallback message
+                content_for_analysis = "Audio processing completed but no transcript was generated. This could be due to audio quality, silence, or language detection issues."
+                logger.info("Using fallback content for AI analysis")
+        
         ai_analysis = gemini_service.generate_summary_and_actions(
-            translation or transcript, pre_meeting_notes
+            content_for_analysis, pre_meeting_notes
         )
         
         # Prepare response data
